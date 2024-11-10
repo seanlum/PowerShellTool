@@ -90,3 +90,13 @@ OUTPUTS
 
 RELATED LINKS
 ```
+
+## Renaming Network Profiles
+![](./media/renamed-network-profiles.png)
+```
+> .\PowerShellTool.ps1 -renameNetworkProfile -npName "Network" -npNameNew "WAN Out"  -npDescNew "Public Internet Connection"
+> .\PowerShellTool.ps1 -renameNetworkProfile -npName "Network 2" -npNameNew "LAb LAN"  -npDescNew "Private Internet Connection"
+```
+### Note: After the command:
+- Disable and re-enable the network adapter for the changes
+- Have not tried just using `ipconfig /renew` with it yet
