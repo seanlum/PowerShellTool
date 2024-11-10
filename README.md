@@ -48,6 +48,8 @@ SYNTAX
 
     PowerShellTool.ps1 -getNetworkProfiles [<CommonParameters>]
 
+    PowerShellTool.ps1 -getNetworkAdapterInfo [-adapterName <String>] [<CommonParameters>]
+
     PowerShellTool.ps1 -renameNetworkProfile -npName <String> -npNameNew <String> [-npDescNew <String>] [<CommonParameters>]
 
 
@@ -69,6 +71,7 @@ DESCRIPTION
         View Network Profiles
             - It can rename network profiles
             - It can rename network profile descriptions
+        Get Verbose info about Network Adapters
         See services in registry
         Validate service installation
 

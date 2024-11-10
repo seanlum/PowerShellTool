@@ -20,6 +20,7 @@
         View Network Profiles
             - It can rename network profiles
             - It can rename network profile descriptions
+        Get Verbose info about Network Adapters
         See services in registry
         Validate service installation
 
@@ -122,6 +123,10 @@ param (
     [switch]$getBluetoothDevices,
     [Parameter(ParameterSetName = "GetNetworkProfiles", Mandatory = $true)]
     [switch]$getNetworkProfiles,
+    [Parameter(ParameterSetName = "GetNetworkAdapters", Mandatory = $true)]
+    [switch]$getNetworkAdapterInfo,
+    [Parameter(ParameterSetName = "GetNetworkAdapters", Mandatory = $false)]
+    [string]$adapterName,
     [Parameter(ParameterSetName = "RenameNetworkProfiles", Mandatory = $true)]
     [switch]$renameNetworkProfile,
     [Parameter(ParameterSetName = "RenameNetworkProfiles", Mandatory = $true)]
@@ -133,7 +138,7 @@ param (
 )
 
 $networkProfilesRegPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\NetworkList\Profiles\"
-
+$barLine =  "================================================================================="
 function Write-OutputLog {
     param (
         [Parameter(Mandatory = $false)]
@@ -197,18 +202,18 @@ function Get-PropertiesTwoLevelsDeep {
             # Skip properties that can't be accessed
             continue
         }
-        
-        # Print the property name and value
-        Write-Indented "$propertyName : $propertyValue" $IndentLevel -No
+        if ($propertyValue) {
+            # Print the property name and value
+            Write-Indented "$propertyName : $propertyValue" $IndentLevel -No
 
-        # Recursively check if the current depth is less than the maximum depth
-        if ($IndentLevel -lt ($MaxDepth - 1) -and
-            $propertyValue -is [System.Collections.IEnumerable] -and
-            $propertyValue -notlike [string]) {
-            
-            foreach ($item in $propertyValue) {
-                # Recursively call the function if the property is an object with its own properties
-                Get-PropertiesTwoLevelsDeep -InputObject $item -IndentLevel ($IndentLevel + 1) -MaxDepth $MaxDepth
+            # Recursively check if the current depth is less than the maximum depth
+            if ($IndentLevel -lt ($MaxDepth - 1) -and
+                $propertyValue -is [System.Collections.IEnumerable] -and
+                $propertyValue -notlike [string]) {
+                foreach ($item in $propertyValue) {
+                    # Recursively call the function if the property is an object with its own properties
+                    Get-PropertiesTwoLevelsDeep -InputObject $item -IndentLevel ($IndentLevel + 1) -MaxDepth $MaxDepth
+                }
             }
         }
     }
@@ -435,6 +440,28 @@ function Get-INFData {
     Write-OutputLog ""
     $serviceNames | ForEach-Object { Validate-ServiceInstallation -serviceName $_ }
     # Review-DriverEventLogs -driverFileName $driverFileName
+}
+
+function Get-NetworkAdapterInfo {
+    param($adapter)
+    Write-OutputLog ""
+    Write-OutputLog "Getting info for "$($adapter.Name)
+    Write-OutputLog $barLine
+    Get-PropertiesTwoLevelsDeep -InputObject $adapter -MaxDepth 1
+    Write-OutputLog $barLine
+}
+
+function Get-NetworkAdaptersInfo {
+
+    foreach ($adapterInfo in $(Get-NetAdapter)) {
+        if ($adapterName) {
+            if ($adapterName -eq $adapterInfo.Name) {
+                Get-NetworkAdapterInfo -adapter $adapterInfo
+            }
+        } else {
+            Get-NetworkAdapterInfo -adapter $adapterInfo
+        }
+    }
 }
 
 function Get-NetworkProfile {
@@ -799,4 +826,6 @@ if ($virusTotal) {
     Get-NetworkProfiles
 } elseif ($renameNetworkProfile) {
     Rename-NetworkProfile
+} elseif ($getNetworkAdapterInfo) {
+    Get-NetworkAdaptersInfo
 }
