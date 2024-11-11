@@ -60,10 +60,64 @@
 #>
 param (
     [Parameter(ParameterSetName = "LogStdOutOnly", Mandatory = $true)]
+    [Parameter(ParameterSetName = "Registry", Mandatory = $false)]
+    [Parameter(ParameterSetName = "Service", Mandatory = $false)]
+    [Parameter(ParameterSetName = "ServiceName", Mandatory = $false)]
+    [Parameter(ParameterSetName = "Authenticode", Mandatory = $false)]
+    [Parameter(ParameterSetName = "Hash", Mandatory = $false)]
+    [Parameter(ParameterSetName = "FilePerms", Mandatory = $true)]
+    [Parameter(ParameterSetName = "INFInfo", Mandatory = $true)]
+    [Parameter(ParameterSetName = "INFDeviceIds", Mandatory = $false)]
+    [Parameter(ParameterSetName = "VirusTotal", Mandatory = $false)]
+    [Parameter(ParameterSetName = "GetNetworkAdapters", Mandatory = $false)]
+    [Parameter(ParameterSetName = "ServicesNotSigned", Mandatory = $false)]
+    [Parameter(ParameterSetName = "GetUSBInfo", Mandatory = $false)]
+    [Parameter(ParameterSetName = "GetAllUSBDeviceInfo", Mandatory = $false)]
+    [Parameter(ParameterSetName = "DeviceInfo", Mandatory = $false)]
+    [Parameter(ParameterSetName = "DriverInfo", Mandatory = $false)]
+    [Parameter(ParameterSetName = "GetBluetoothDevices", Mandatory = $false)]
+    [Parameter(ParameterSetName = "GetNetworkProfiles", Mandatory = $false)]
+    [Parameter(ParameterSetName = "RenameNetworkProfiles", Mandatory = $false)]
     [switch]$logStdOutOnly,
     [Parameter(ParameterSetName = "LogFile", Mandatory = $false)]
+    [Parameter(ParameterSetName = "Registry", Mandatory = $false)]
+    [Parameter(ParameterSetName = "Service", Mandatory = $false)]
+    [Parameter(ParameterSetName = "ServiceName", Mandatory = $false)]
+    [Parameter(ParameterSetName = "Authenticode", Mandatory = $false)]
+    [Parameter(ParameterSetName = "Hash", Mandatory = $false)]
+    [Parameter(ParameterSetName = "FilePerms", Mandatory = $true)]
+    [Parameter(ParameterSetName = "INFInfo", Mandatory = $true)]
+    [Parameter(ParameterSetName = "INFDeviceIds", Mandatory = $false)]
+    [Parameter(ParameterSetName = "VirusTotal", Mandatory = $false)]
+    [Parameter(ParameterSetName = "GetNetworkAdapters", Mandatory = $false)]
+    [Parameter(ParameterSetName = "ServicesNotSigned", Mandatory = $false)]
+    [Parameter(ParameterSetName = "GetUSBInfo", Mandatory = $false)]
+    [Parameter(ParameterSetName = "GetAllUSBDeviceInfo", Mandatory = $false)]
+    [Parameter(ParameterSetName = "DeviceInfo", Mandatory = $false)]
+    [Parameter(ParameterSetName = "DriverInfo", Mandatory = $false)]
+    [Parameter(ParameterSetName = "GetBluetoothDevices", Mandatory = $false)]
+    [Parameter(ParameterSetName = "GetNetworkProfiles", Mandatory = $false)]
+    [Parameter(ParameterSetName = "RenameNetworkProfiles", Mandatory = $false)]
     [switch]$logFileOnly,
     [Parameter(ParameterSetName = "LogFile", Mandatory = $true)]
+    [Parameter(ParameterSetName = "Registry", Mandatory = $false)]
+    [Parameter(ParameterSetName = "Service", Mandatory = $false)]
+    [Parameter(ParameterSetName = "ServiceName", Mandatory = $false)]
+    [Parameter(ParameterSetName = "Authenticode", Mandatory = $false)]
+    [Parameter(ParameterSetName = "Hash", Mandatory = $false)]
+    [Parameter(ParameterSetName = "FilePerms", Mandatory = $true)]
+    [Parameter(ParameterSetName = "INFInfo", Mandatory = $true)]
+    [Parameter(ParameterSetName = "INFDeviceIds", Mandatory = $false)]
+    [Parameter(ParameterSetName = "VirusTotal", Mandatory = $false)]
+    [Parameter(ParameterSetName = "GetNetworkAdapters", Mandatory = $false)]
+    [Parameter(ParameterSetName = "ServicesNotSigned", Mandatory = $false)]
+    [Parameter(ParameterSetName = "GetUSBInfo", Mandatory = $false)]
+    [Parameter(ParameterSetName = "GetAllUSBDeviceInfo", Mandatory = $false)]
+    [Parameter(ParameterSetName = "DeviceInfo", Mandatory = $false)]
+    [Parameter(ParameterSetName = "DriverInfo", Mandatory = $false)]
+    [Parameter(ParameterSetName = "GetBluetoothDevices", Mandatory = $false)]
+    [Parameter(ParameterSetName = "GetNetworkProfiles", Mandatory = $false)]
+    [Parameter(ParameterSetName = "RenameNetworkProfiles", Mandatory = $false)]
     [string]$logFile,
     [Parameter(ParameterSetName = "Registry", Mandatory = $true)]
     [switch]$registry,
@@ -127,6 +181,7 @@ param (
     [switch]$getNetworkAdapterInfo,
     [Parameter(ParameterSetName = "GetNetworkAdapters", Mandatory = $false)]
     [string]$adapterName,
+    [switch]$adapterDriverInfo,
     [Parameter(ParameterSetName = "RenameNetworkProfiles", Mandatory = $true)]
     [switch]$renameNetworkProfile,
     [Parameter(ParameterSetName = "RenameNetworkProfiles", Mandatory = $true)]
@@ -168,9 +223,12 @@ function Write-OutputLog {
             $finalOutput | Out-File -FilePath $logFile -Append -Encoding utf8
         }
     }
+}
 
-
-    
+function Write-OutputCapture {
+    param([object]$InputObject)
+    $outputString = $InputObject | Out-String
+    Write-OutputLog $outputString
 }
 
 function Get-PropertiesTwoLevelsDeep {
@@ -217,6 +275,8 @@ function Get-PropertiesTwoLevelsDeep {
             }
         }
     }
+
+    return $properties
 }
 
 # Function to verify driver signature
@@ -444,16 +504,49 @@ function Get-INFData {
 
 function Get-NetworkAdapterInfo {
     param($adapter)
-    Write-OutputLog ""
-    Write-OutputLog "Getting info for "$($adapter.Name)
-    Write-OutputLog $barLine
-    Get-PropertiesTwoLevelsDeep -InputObject $adapter -MaxDepth 1
-    Write-OutputLog $barLine
+    #Write-OutputLog ""
+    #Write-OutputLog "Getting info for "$($adapter.Name)
+    #Write-OutputLog $barLine
+
+    if ($adapterDriverInfo) {
+        $adapterProperties = Get-PropertiesTwoLevelsDeep $adapter -MaxDepth 1
+        Write-OutputLog $barLine
+        Write-OutputLog ""
+        $macAddress = $($adapter.MacAddress -replace '-', ':')
+        $wmiInfo = Get-WmiObject -Class Win32_NetworkAdapter | Where-Object {$_.MACAddress -eq $macAddress}
+        Write-OutputLog $barLine
+        Write-OutputLog ""
+        Write-OutputLog "Network Adapter Information"
+        $wmiProperties = Get-PropertiesTwoLevelsDeep $wmiInfo -MaxDepth 1
+        $cimInstance = Get-CimInstance -ClassName Win32_NetworkAdapter | Where-Object {$_.MACAddress -eq $macAddress}
+        Write-OutputLog $barLine
+        Write-OutputLog ""
+        Write-OutputLog "CIM Instance Properties"
+        $cimInstanceProperties = Get-PropertiesTwoLevelsDeep $cimInstance -MaxDepth 1
+        Write-OutputLog $barLine
+        Write-OutputLog ""
+        $ipAddresses = Get-NetIPAddress -InterfaceIndex $adapter.InterfaceIndex
+        foreach ($ipAddress in $ipAddresses) {
+            Write-OutputLog $barLine
+            Write-OutputLog "IP Address properties for " $($ipAddress.IPAddress)
+            $ipAddressProperties = Get-PropertiesTwoLevelsDeep $ipAddress -MaxDepth 1
+            Write-OutputLog $barLine
+            Write-OutputLog ""
+        }
+        $routes = Get-NetRoute -InterfaceIndex $adapter.InterfaceIndex | Format-Table -AutoSize
+        Write-OutputCapture -InputObject $routes
+        Write-OutputLog $barLine
+        $deviceId = $($adapter.PNPDeviceID)
+        Get-DriverInfo
+    } else {
+        Write-OutputLog $barLine
+        $properties = Get-PropertiesTwoLevelsDeep $adapter -MaxDepth 1
+    }
 }
 
 function Get-NetworkAdaptersInfo {
-
-    foreach ($adapterInfo in $(Get-NetAdapter)) {
+    $adapters = $(Get-NetAdapter)
+    foreach ($adapterInfo in $adapters) {
         if ($adapterName) {
             if ($adapterName -eq $adapterInfo.Name) {
                 Get-NetworkAdapterInfo -adapter $adapterInfo
@@ -655,11 +748,11 @@ function Search-Directory {
 }
 
 function Get-DriverInfo {
-    if ($deviceId -and $getDeviceInfo) {
+    if ($deviceId) {
         # Replace "YOUR_DEVICE_INSTANCE_ID" with the actual InstanceId from Get-PnpDevice
         $deviceInfo = Get-WmiObject Win32_PnPSignedDriver | Where-Object { $_.DeviceID -eq $deviceId } | Select-Object DeviceName, DriverVersion, Manufacturer, DriverProviderName, InfName
         Write-OutputLog "Device Info"
-        Get-PropertiesTwoLevelsDeep $deviceInfo -MaxDepth 1
+        $driverProperties = Get-PropertiesTwoLevelsDeep $deviceInfo -MaxDepth 1
         $fileName = [System.IO.Path]::GetFileNameWithoutExtension($deviceInfo.InfName)
         $driverDirectories = @(
             "C:\Windows\System32\DriverStore\FileRepository\",
