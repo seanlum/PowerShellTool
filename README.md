@@ -26,7 +26,7 @@ Get-NetAdapter
         Get-CimInstance -ClassName Win32_NetworkAdapter
         Get-NetIPAddress
         Get-NetRoute
-            Get-DriverInfo
+        Get-DriverInfo
 
 Get-DriverInfo
     Get-INFData
