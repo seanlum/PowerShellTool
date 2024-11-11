@@ -21,7 +21,18 @@ A tool which uses PowerShell to provide analysis-level details about different p
 
 ```
 Type Tree 
-NetAdapter (MSFT_NetAdapter)
-    Win32_NetworkAdapter
+Get-NetAdapter
+    Get-WmiObject -Class Win32_NetworkAdapter
+        Get-CimInstance -ClassName Win32_NetworkAdapter
+        Get-NetIPAddress
+        Get-NetRoute
+            Get-DriverInfo
 
+Get-DriverInfo
+    Get-INFData
+        Get-Perms
+        Get-AuthenticodeSignature
+        Get-PnpDevice -InstanceId
+        CrossReference-DeviceIDs
+        Get-Service
 ```
