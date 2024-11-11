@@ -78,6 +78,7 @@ param (
     [Parameter(ParameterSetName = "GetBluetoothDevices", Mandatory = $false)]
     [Parameter(ParameterSetName = "GetNetworkProfiles", Mandatory = $false)]
     [Parameter(ParameterSetName = "RenameNetworkProfiles", Mandatory = $false)]
+    [Parameter(ParameterSetname = "GetNetworkConnections", Mandatory = $false)]
     [switch]$logStdOutOnly,
     [Parameter(ParameterSetName = "LogFile", Mandatory = $false)]
     [Parameter(ParameterSetName = "Registry", Mandatory = $false)]
@@ -98,6 +99,7 @@ param (
     [Parameter(ParameterSetName = "GetBluetoothDevices", Mandatory = $false)]
     [Parameter(ParameterSetName = "GetNetworkProfiles", Mandatory = $false)]
     [Parameter(ParameterSetName = "RenameNetworkProfiles", Mandatory = $false)]
+    [Parameter(ParameterSetname = "GetNetworkConnections", Mandatory = $false)]
     [switch]$logFileOnly,
     [Parameter(ParameterSetName = "LogFile", Mandatory = $true)]
     [Parameter(ParameterSetName = "Registry", Mandatory = $false)]
@@ -118,6 +120,7 @@ param (
     [Parameter(ParameterSetName = "GetBluetoothDevices", Mandatory = $false)]
     [Parameter(ParameterSetName = "GetNetworkProfiles", Mandatory = $false)]
     [Parameter(ParameterSetName = "RenameNetworkProfiles", Mandatory = $false)]
+    [Parameter(ParameterSetname = "GetNetworkConnections", Mandatory = $false)]
     [string]$logFile,
     [Parameter(ParameterSetName = "Registry", Mandatory = $true)]
     [switch]$registry,
@@ -189,7 +192,9 @@ param (
     [Parameter(ParameterSetName = "RenameNetworkProfiles", Mandatory = $true)]
     [string]$npNameNew,
     [Parameter(ParameterSetName = "RenameNetworkProfiles", Mandatory = $false)]
-    [string]$npDescNew
+    [string]$npDescNew,
+    [Parameter(ParameterSetname = "GetNetworkConnections", Mandatory = $true)]
+    [switch]$getNetworkConnections
 )
 
 $networkProfilesRegPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\NetworkList\Profiles\"
@@ -628,6 +633,35 @@ function Get-NetworkProfiles {
     }
 }
 
+function Get-NetworkConnections {
+    $tcp = Get-NetTCPConnection | Sort-Object -Property OwningProcess,RemoteAddress,LocalAddress -Descending | Select-Object @{Name='Protocol';Expression={'TCP'}}, LocalAddress, LocalPort, RemoteAddress, RemotePort, State, OwningProcess
+    $udp = Get-NetUDPEndpoint | Sort-Object -Property OwningProcess -Descending | Select-Object @{Name='Protocol';Expression={'UDP'}}, LocalAddress, LocalPort, OwningProcess
+    $services = Get-WmiObject -Query "Select * from Win32_Service" | Select-Object -Property Name, DisplayName, ProcessId
+    $connections = $tcp + $udp
+    # $services | Format-Table
+    $connections | ForEach-Object {
+        $currentPid = $_.OwningProcess
+        # Get the process details using the OwningProcess (PID)
+        $process = Get-Process -Id $currentPid -ErrorAction SilentlyContinue
+        # $processProperties = Get-PropertiesTwoLevelsDeep $process -MaxDepth 2
+        $serviceNames = $services | Where-Object { $_.ProcessId -eq $currentPid } | ForEach-Object { $_.DisplayName }
+        # Create a new object combining connection, process, and service details
+        [PSCustomObject]@{
+            Protocol      = $_.Protocol
+            LocalAddress  = $_.LocalAddress
+            LocalPort     = $_.LocalPort
+            RemoteAddress = if ($_.Protocol -eq 'TCP') { $_.RemoteAddress } else { $null }
+            RemotePort    = if ($_.Protocol -eq 'TCP') { $_.RemotePort } else { $null }
+            State         = if ($_.Protocol -eq 'TCP') { $_.State } else { $null }
+            ProcessName   = if ($process) { $process.Name } else { 'Unknown' }
+            ProcessId     = $_.OwningProcess
+            Services      = if ($serviceNames) { $serviceNames -join ', ' } else { $null }
+            Path          = if ($process) { $process.Path } else { 'Unknown' }
+            Modules   = if ($process) { $($process.Modules | Select-Object FileName ) -join ', ' } else { 'Unknown' }
+        }
+    } | Sort-Object -Property Service, ProcessId, Protocol, LocalPort, LocalAddress | Format-Table -AutoSize
+}
+
 # Define the C# code to import necessary Windows API functions
 $code = @"
 using System;
@@ -921,4 +955,6 @@ if ($virusTotal) {
     Rename-NetworkProfile
 } elseif ($getNetworkAdapterInfo) {
     Get-NetworkAdaptersInfo
+} elseif ($getNetworkConnections) {
+    Get-NetworkConnections
 }

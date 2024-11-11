@@ -7,7 +7,7 @@ A tool which uses PowerShell to provide analysis-level details about different p
 ```
 
 ### Help Output
-[Get-Help .\PowerShellTool.ps1](./media/help-output-111020240828PST.txt)
+[Get-Help .\PowerShellTool.ps1](./media/help-output-202411111548PST.txt)
 
 ## Renaming Network Profiles
 ![](./media/renamed-network-profiles.png)
