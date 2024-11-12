@@ -194,7 +194,17 @@ param (
     [Parameter(ParameterSetName = "RenameNetworkProfiles", Mandatory = $false)]
     [string]$npDescNew,
     [Parameter(ParameterSetname = "GetNetworkConnections", Mandatory = $true)]
-    [switch]$getNetworkConnections
+    [switch]$getNetworkConnections,
+    [Parameter(ParameterSetname = "GetNetworkConnections", Mandatory = $false)]
+    [string]$netProtocol,
+    [Parameter(ParameterSetname = "GetNetworkConnections", Mandatory = $false)]
+    [string]$netAddress,
+    [Parameter(ParameterSetname = "GetNetworkConnections", Mandatory = $false)]
+    [switch]$netGetServiceNames,
+    [Parameter(ParameterSetname = "GetNetworkConnections", Mandatory = $false)]
+    [string]$netServiceName,
+    [Parameter(ParameterSetname = "GetNetworkConnections", Mandatory = $false)]
+    [int]$netPid
 )
 
 $networkProfilesRegPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\NetworkList\Profiles\"
@@ -633,33 +643,147 @@ function Get-NetworkProfiles {
     }
 }
 
+function Get-TCPConnections {
+    return Get-NetTCPConnection | Sort-Object -Property OwningProcess,RemoteAddress,LocalAddress -Descending | Select-Object @{Name='Protocol';Expression={'TCP'}}, LocalAddress, LocalPort, RemoteAddress, RemotePort, State, OwningProcess
+}
+
+function Get-UDPConnections {
+    return Get-NetUDPEndpoint | Sort-Object -Property OwningProcess -Descending | Select-Object @{Name='Protocol';Expression={'UDP'}}, LocalAddress, LocalPort, OwningProcess
+}
+
+function Get-TCPxorUDPConnections {
+    if ($netProtocol) {
+        if ($netProtocol -eq 'TCP') {
+            Write-OutputLog "Getting TCP Connections"
+            return Get-TCPConnections
+        } else {
+            Write-OutputLog "Getting UDP Connections"
+            return Get-UDPConnections
+        }
+    } else {
+        Write-OutputLog "Getting TCP Connections"
+        $tcp = Get-TCPConnections
+        Write-OutputLog "Getting UDP Connections"
+        $udp = Get-UDPConnections
+        $connections = $tcp + $udp
+        return $connections
+    }
+}
+
 function Get-NetworkConnections {
-    $tcp = Get-NetTCPConnection | Sort-Object -Property OwningProcess,RemoteAddress,LocalAddress -Descending | Select-Object @{Name='Protocol';Expression={'TCP'}}, LocalAddress, LocalPort, RemoteAddress, RemotePort, State, OwningProcess
-    $udp = Get-NetUDPEndpoint | Sort-Object -Property OwningProcess -Descending | Select-Object @{Name='Protocol';Expression={'UDP'}}, LocalAddress, LocalPort, OwningProcess
-    $services = Get-WmiObject -Query "Select * from Win32_Service" | Select-Object -Property Name, DisplayName, ProcessId
-    $connections = $tcp + $udp
+    $connections = Get-TCPxorUDPConnections
+    if ($netGetServiceNames) {
+        Write-OutputLog "Getting Services"
+        $services = Get-WmiObject -Query "Select * from Win32_Service" | Select-Object -Property Name, DisplayName, ProcessId
+    }
     # $services | Format-Table
+    Write-OutputLog "Sorting data"
     $connections | ForEach-Object {
+        $matchCount = 0
+        $numParam = 0
+        if ($netProtocol) {
+            $numParam += 1
+            if ($_.Protocol -eq $netProtocol) {
+                $matchCount += 1
+            }
+        }
+
+        if ($netAddress) {
+            $numParam += 1
+            $protocolMatch = $false
+            if ($_.Protocol -eq 'TCP') {
+                if ($_.RemoteAddress -eq $netAddress) {
+                    $protocolMatch = $true
+                }
+            }
+            if ($_.LocalAddress -eq $netAddress) {
+                $protocolMatch = $true
+            }
+            if ($protocolMatch -eq $true) {
+                $matchCount += 1
+            }
+        }
+
+        if ($netPid) {
+            $numParam += 1
+            if ($_.OwningProcess -eq $netPid) {
+                Write-OutputLog $_.OwningProcess " - " $netPid
+                $matchCount += 1
+            }
+        }
+
+        function Setup-OutputVariables {
+            param([switch]$useMatches,[int]$matchCount,[object]$serviceNames,[object]$process)
+
+
+
+            # Create a new object combining connection, process, matches, and service details
+            if ($useMatches) {
+                return [PSCustomObject]@{
+                    Matches       = $matchCount
+                    Protocol      = $_.Protocol
+                    LocalAddress  = $_.LocalAddress
+                    LocalPort     = $_.LocalPort
+                    RemoteAddress = if ($_.Protocol -eq 'TCP') { $_.RemoteAddress } else { $null }
+                    RemotePort    = if ($_.Protocol -eq 'TCP') { $_.RemotePort } else { $null }
+                    State         = if ($_.Protocol -eq 'TCP') { $_.State } else { 'Listening' }  # UDP endpoints default to Listening
+                    ProcessName   = if ($process) { $process.Name } else { 'Unknown' }
+                    ProcessId     = $_.OwningProcess
+                    Services      = if ($serviceNames) { $serviceNames -join ', ' } else { $null }
+                    Path          = if ($process) { $process.Path } else { 'Unknown' }
+                    Modules   = if ($process) { $($process.Modules | Select-Object FileName ) -join ', ' } else { 'Unknown' }
+                }
+            } else {
+                return [PSCustomObject]@{
+                    Protocol      = $_.Protocol
+                    LocalAddress  = $_.LocalAddress
+                    LocalPort     = $_.LocalPort
+                    RemoteAddress = if ($_.Protocol -eq 'TCP') { $_.RemoteAddress } else { $null }
+                    RemotePort    = if ($_.Protocol -eq 'TCP') { $_.RemotePort } else { $null }
+                    State         = if ($_.Protocol -eq 'TCP') { $_.State } else { 'Listening' }  # UDP endpoints default to Listening
+                    ProcessName   = if ($process) { $process.Name } else { 'Unknown' }
+                    ProcessId     = $_.OwningProcess
+                    Services      = if ($serviceNames) { $serviceNames -join ', ' } else { $null }
+                    Path          = if ($process) { $process.Path } else { 'Unknown' }
+                    Modules   = if ($process) { $($process.Modules | Select-Object FileName ) -join ', ' } else { 'Unknown' }
+                }
+            }
+        }
+
         $currentPid = $_.OwningProcess
         # Get the process details using the OwningProcess (PID)
         $process = Get-Process -Id $currentPid -ErrorAction SilentlyContinue
         # $processProperties = Get-PropertiesTwoLevelsDeep $process -MaxDepth 2
-        $serviceNames = $services | Where-Object { $_.ProcessId -eq $currentPid } | ForEach-Object { $_.DisplayName }
-        # Create a new object combining connection, process, and service details
-        [PSCustomObject]@{
-            Protocol      = $_.Protocol
-            LocalAddress  = $_.LocalAddress
-            LocalPort     = $_.LocalPort
-            RemoteAddress = if ($_.Protocol -eq 'TCP') { $_.RemoteAddress } else { $null }
-            RemotePort    = if ($_.Protocol -eq 'TCP') { $_.RemotePort } else { $null }
-            State         = if ($_.Protocol -eq 'TCP') { $_.State } else { $null }
-            ProcessName   = if ($process) { $process.Name } else { 'Unknown' }
-            ProcessId     = $_.OwningProcess
-            Services      = if ($serviceNames) { $serviceNames -join ', ' } else { $null }
-            Path          = if ($process) { $process.Path } else { 'Unknown' }
-            Modules   = if ($process) { $($process.Modules | Select-Object FileName ) -join ', ' } else { 'Unknown' }
+        $serviceMatch = $false
+        if ($netGetServiceNames) {
+            $serviceNames = $services | Where-Object { $_.ProcessId -eq $currentPid } | ForEach-Object { $_.DisplayName }
+            foreach ($service in $serviceNames) {
+                if ($service -eq $netServiceName) {
+                    $serviceMatch = $true
+                }
+            }
+        } else {
+            $serviceNames = ''
         }
-    } | Sort-Object -Property Service, ProcessId, Protocol, LocalPort, LocalAddress | Format-Table -AutoSize
+        if ($netServiceName) {
+            $numParam += 1
+            if ($serviceMatch -eq $false) {
+                return
+            } else {
+                $matchCount += 1
+            }
+        }
+
+        if (($netAddress) -or ($netProtocol) -or ($netPid) -or ($netServiceName)) {
+            if ($matchCount -lt $numParam) {
+                return
+            }
+
+            return Setup-OutputVariables -process $process -serviceNames $serviceNames -useMatches -matchCount $matchCount | Sort-Object -Property Services, ProcessId, LocalAddress, LocalPort, Protocol | Sort-Object  Matches
+        } else {
+            return Setup-OutputVariables -process $process -serviceNames $serviceNames | Sort-Object -Property Services, ProcessId, LocalAddress, LocalPort, Protocol
+        }
+    } | Format-Table -AutoSize
 }
 
 # Define the C# code to import necessary Windows API functions

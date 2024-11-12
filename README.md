@@ -6,6 +6,20 @@ A tool which uses PowerShell to provide analysis-level details about different p
 .\PowerShellTool.ps1 -logFileOnly -logFile '.\Network-Details.txt' -getNetworkAdapterInfo -adapterName 'Network' -adapterDriverInfo
 ```
 
+### Getting Network Connection Information
+```
+PS D:\Code\PowerShell\PowerShellTool> .\PowerShellTool.ps1 -getNetworkConnections -netAddress 0.0.0.0 -netProtocol TCP -netGetServiceNames -netServiceName 'Encrypting File System (EFS)'
+Getting TCP Connections
+Getting Services
+Sorting data
+
+Matches Protocol LocalAddress LocalPort RemoteAddress RemotePort  State ProcessName ProcessId Services
+------- -------- ------------ --------- ------------- ----------  ----- ----------- --------- --------
+      3 TCP      0.0.0.0          49664 0.0.0.0                0 Listen lsass            1076 Encrypting File System (EFS), CNG Key Isolation, Security Accounts Manager, Credential Manager
+
+
+```
+
 ### Help Output
 [Get-Help .\PowerShellTool.ps1](./media/help-output-202411111548PST.txt)
 
