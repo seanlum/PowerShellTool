@@ -21,7 +21,7 @@ Matches Protocol LocalAddress LocalPort RemoteAddress RemotePort  State ProcessN
 ```
 
 ### Help Output
-[Get-Help .\PowerShellTool.ps1](./media/help-output-202411111548PST.txt)
+[Get-Help .\PowerShellTool.ps1](./media/help-output.log)
 
 ## Renaming Network Profiles
 ![](./media/renamed-network-profiles.png)
