@@ -62,11 +62,10 @@ param (
     [Parameter(ParameterSetName = "LogStdOutOnly", Mandatory = $true)]
     [Parameter(ParameterSetName = "Registry", Mandatory = $false)]
     [Parameter(ParameterSetName = "Service", Mandatory = $false)]
-    [Parameter(ParameterSetName = "ServiceName", Mandatory = $false)]
     [Parameter(ParameterSetName = "Authenticode", Mandatory = $false)]
     [Parameter(ParameterSetName = "Hash", Mandatory = $false)]
-    [Parameter(ParameterSetName = "FilePerms", Mandatory = $true)]
-    [Parameter(ParameterSetName = "INFInfo", Mandatory = $true)]
+    [Parameter(ParameterSetName = "FilePerms", Mandatory = $false)]
+    [Parameter(ParameterSetName = "INFInfo", Mandatory = $false)]
     [Parameter(ParameterSetName = "INFDeviceIds", Mandatory = $false)]
     [Parameter(ParameterSetName = "VirusTotal", Mandatory = $false)]
     [Parameter(ParameterSetName = "GetNetworkAdapters", Mandatory = $false)]
@@ -83,11 +82,10 @@ param (
     [Parameter(ParameterSetName = "LogFile", Mandatory = $false)]
     [Parameter(ParameterSetName = "Registry", Mandatory = $false)]
     [Parameter(ParameterSetName = "Service", Mandatory = $false)]
-    [Parameter(ParameterSetName = "ServiceName", Mandatory = $false)]
     [Parameter(ParameterSetName = "Authenticode", Mandatory = $false)]
     [Parameter(ParameterSetName = "Hash", Mandatory = $false)]
-    [Parameter(ParameterSetName = "FilePerms", Mandatory = $true)]
-    [Parameter(ParameterSetName = "INFInfo", Mandatory = $true)]
+    [Parameter(ParameterSetName = "FilePerms", Mandatory = $false)]
+    [Parameter(ParameterSetName = "INFInfo", Mandatory = $false)]
     [Parameter(ParameterSetName = "INFDeviceIds", Mandatory = $false)]
     [Parameter(ParameterSetName = "VirusTotal", Mandatory = $false)]
     [Parameter(ParameterSetName = "GetNetworkAdapters", Mandatory = $false)]
@@ -104,11 +102,10 @@ param (
     [Parameter(ParameterSetName = "LogFile", Mandatory = $true)]
     [Parameter(ParameterSetName = "Registry", Mandatory = $false)]
     [Parameter(ParameterSetName = "Service", Mandatory = $false)]
-    [Parameter(ParameterSetName = "ServiceName", Mandatory = $false)]
     [Parameter(ParameterSetName = "Authenticode", Mandatory = $false)]
     [Parameter(ParameterSetName = "Hash", Mandatory = $false)]
-    [Parameter(ParameterSetName = "FilePerms", Mandatory = $true)]
-    [Parameter(ParameterSetName = "INFInfo", Mandatory = $true)]
+    [Parameter(ParameterSetName = "FilePerms", Mandatory = $false)]
+    [Parameter(ParameterSetName = "INFInfo", Mandatory = $false)]
     [Parameter(ParameterSetName = "INFDeviceIds", Mandatory = $false)]
     [Parameter(ParameterSetName = "VirusTotal", Mandatory = $false)]
     [Parameter(ParameterSetName = "GetNetworkAdapters", Mandatory = $false)]
@@ -125,13 +122,11 @@ param (
     [Parameter(ParameterSetName = "Registry", Mandatory = $true)]
     [switch]$registry,
     [Parameter(ParameterSetName = "Service", Mandatory = $true)]
-    [Parameter(ParameterSetName = "ServiceName", Mandatory = $true)]
     [switch]$services,
+    [Parameter(ParameterSetName = "Service", Mandatory = $false)]
     [Parameter(ParameterSetName = "Registry", Mandatory = $true)]
-    [Parameter(ParameterSetName = "ServiceName", Mandatory = $false)]
     [string]$regPath,
     [Parameter(ParameterSetName = "Service", Mandatory = $false)]
-    [Parameter(ParameterSetName = "ServiceName", Mandatory = $true)]
     [string]$serviceName,
     [Parameter(ParameterSetName = "Authenticode", Mandatory = $true)]
     [switch]$getAuthenticode,
@@ -325,7 +320,7 @@ function Get-Perms {
         Write-OutputLog "File path found at: "$filePath
         if ($permissions) {
             Write-OutputLog "Permissions:"
-            Get-PropertiesTwoLevelsDeep -InputObject $permissions -MaxDepth 1
+            $permissionsProperties = Get-PropertiesTwoLevelsDeep -InputObject $permissions -MaxDepth 1
         } else {
             Write-OutputLog "Could not find permissions"
         }
@@ -349,7 +344,7 @@ function Get-PnPInfo {
     if ($deviceId -and $getDeviceInfo) {
         Write-OutputLog "Getting PnP Device Information: " $tempvid
         $pnpDevice = Get-PnpDevice -InstanceId $deviceId
-        Get-PropertiesTwoLevelsDeep $pnpDevice -MaxDepth 1
+        $pnpProperties = Get-PropertiesTwoLevelsDeep $pnpDevice -MaxDepth 1
 
         # Extract relevant information
         $hardwareId = ($device | Where-Object { $_.KeyName -eq "DEVPKEY_Device_HardwareIds" }).Data
@@ -394,12 +389,15 @@ function CrossReference-DeviceIDs {
 # Function to validate service installation
 function Validate-ServiceInstallation {
     param ($serviceName)
+    if (-not $serviceName) {
+        return 
+    }
     Write-OutputLog ""
     Write-OutputLog "Validating service installation for $serviceName..."
     $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
     if ($service) {
         Write-OutputLog "Service $serviceName is installed. Status: $($service.Status)"
-        Get-PropertiesTwoLevelsDeep $service -MaxDepth 1
+        $serviceProperties = Get-PropertiesTwoLevelsDeep $service -MaxDepth 1
     } else {
         Write-OutputLog "Service $serviceName is not found."
     }
@@ -506,8 +504,8 @@ function Get-INFData {
         Analyze-DriverFile -driverFilePath $checkPath
         Write-OutputLog ""
         Verify-FileSignature -filePath $checkPath
-        Write-OutputLog "Driver Permissions"
-        Get-FSPerms -filePath $checkPath
+        # Write-OutputLog "Driver Permissions"
+        # Get-FSPerms -filePath $checkPath
 
     }
     Write-OutputLog ""
@@ -953,18 +951,21 @@ if ($serviceName) {
 if ($virusTotal) {
     if ($vtHash) {
         # VirusTotal API URL for hash lookup
-        $vtApiUrl = "https://www.virustotal.com/api/v3/files/{0}" -f $(echo $fileHash)
+        $vtApiUrl = "https://www.virustotal.com/api/v3/files/{0}" -f $($vtHash)
 
         # Set up headers with the API key
         $headers = @{
             "x-apikey" = $vtAPIKey
+            "Content-Type" = "application/json"
         }
         Write-OutputLog $vtApiUrl
         $response = Invoke-RestMethod -Uri $vtApiUrl -Headers $headers -Method Get
         if ($vtSigInfo) {
             $response.data.attributes.signature_info | Format-List
         } else {
-            $response.data | Format-List
+            $attributesProperties = Get-PropertiesTwoLevelsDeep $response.data.attributes -maxDepth 1
+            $signatureInfoProperties = Get-PropertiesTwoLevelsDeep $response.data.attributes.signature_info -maxDepth 1
+            $lastResultsProperties = Get-PropertiesTwoLevelsDeep $response.data.attributes.last_analysis_results -maxDepth 1
         }
     }
 } elseif ($hash) {
@@ -1054,9 +1055,8 @@ if ($virusTotal) {
        # Get-PropertiesTwoLevelsDeep $device -MaxDepth 1
     }
 } elseif ($getDeviceInfo) {
-    Get-DriverInfo | Format-List
-    Get-PropertiesTwoLevelsDeep $(Get-FirmwareInfo) -MaxDepth 1
-    Get-PnPInfo | Format-List
+    Get-DriverInfo
+    Get-PnPInfo
 } elseif ($getDriverInfo) {
     Get-DriverInfo | Format-List
 } elseif ($getInfInfo) {
@@ -1072,7 +1072,11 @@ if ($virusTotal) {
         Get-Perms -filePath $filePath
     }
 } elseif ($getBluetoothDevices) {
-    Get-BluetoothDevices | Format-List
+    foreach ($bluetoothDevice in $(Get-BluetoothDevices)) {
+        Write-OutputLog $barLine
+        $btProperties = Get-PropertiesTwoLevelsDeep $bluetoothDevice -MaxDepth 1
+
+    }
 } elseif ($getNetworkProfiles) {
     Get-NetworkProfiles
 } elseif ($renameNetworkProfile) {
